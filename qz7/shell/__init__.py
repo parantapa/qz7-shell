@@ -14,6 +14,8 @@ from qz7.shell.ssh import get_ssh_client
 
 DEFAULT_TERM_WIDTH = 1024
 
+log = logbook.Logger(__name__)
+
 def set_default_term_width(width):
     global DEFAULT_TERM_WIDTH
     DEFAULT_TERM_WIDTH = width
@@ -28,6 +30,9 @@ class RemoteCompletedProcess:
         self.args = args
         self.returncode = returncode
         self.stdout = stdout
+
+    def __repr__(self):
+        return f"RemoteCompletedProcess(hostname={self.hostname!r}, args={self.args!r} returncode={self.returncode}"
 
 class RemoteCalledProcessError(Exception):
     """
@@ -53,6 +58,9 @@ def local(cmd, *args, **kwargs):
         cmd = cmd.tocmd(shell=shell)
         cmd = shlex.split(cmd)
 
+    if __debug__:
+        log.debug(f"local: {cmd!r}")
+
     return run(cmd, *args, **kwargs)
 
 def remote(hostname, cmd, shell="/bin/bash -l -c",
@@ -65,6 +73,9 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
     if isinstance(cmd, CmdList):
         cmd = cmd.tocmd(shell=shell)
 
+    if __debug__:
+        log.debug(f"{hostname}: {cmd!r}")
+
     ssh_client = get_ssh_client(hostname)
 
     chan = ssh_client.get_transport().open_session()
@@ -72,6 +83,7 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
         if term_width is None:
             term_width = DEFAULT_TERM_WIDTH
         chan.get_pty(width=term_width)
+    chan.exec_command(cmd)
     sout = chan.makefile("rt", -1)
 
     output = []
