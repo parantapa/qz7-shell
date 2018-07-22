@@ -32,7 +32,7 @@ class RemoteCompletedProcess:
         self.stdout = stdout
 
     def __repr__(self):
-        return f"RemoteCompletedProcess(hostname={self.hostname!r}, args={self.args!r} returncode={self.returncode}"
+        return f"RemoteCompletedProcess(hostname={self.hostname!r}, args={self.args!r} returncode={self.returncode})"
 
 class RemoteCalledProcessError(Exception):
     """
