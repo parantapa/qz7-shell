@@ -69,18 +69,19 @@ def command(*args, quote=None):
     """
 
     if not args:
-        raise ValueError("Arguments can't be empty")
+        return CmdList()
 
     if len(args) == 1:
         if quote is None:
             quote = False
         args = args[0]
         if quote:
-            args = shlex.quote(args)
+            args = shlex.quote(str(args))
     else:
         if quote is None:
             quote = True
         if quote:
+            args = map(str, args)
             args = map(shlex.quote, args)
         args = " ".join(args)
 
