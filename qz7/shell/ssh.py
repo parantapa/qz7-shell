@@ -38,6 +38,10 @@ def get_connect_config(ssh_config, hostname):
         if 'proxycommand' in user_config:
             cfg['sock'] = paramiko.ProxyCommand(user_config['proxycommand'])
 
+        cfg["timeout"] = 120
+        cfg["banner_timeout"] = 120
+        cfg["auth_timeout"] = 120
+
     return cfg
 
 def make_ssh_client(hostname):
