@@ -211,6 +211,9 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
     for cmd in cmds:
         if isinstance(cmd, CmdList):
             cmd = ShellCmdList(cmd, shell=shell)
+        elif isinstance(cmd, ShellCmdList) and not cmd.final:
+            cmd = ShellCmdList(cmd, shell=shell)
+
         ncmds.append(cmd)
     cmds = ncmds
 
@@ -240,6 +243,8 @@ def local(cmd, *args, **kwargs):
     echo_cmd = kwargs.pop("echo_cmd", True)
 
     if isinstance(cmd, CmdList):
+        cmd = ShellCmdList(cmd, shell=shell)
+    elif isinstance(cmd, ShellCmdList) and not cmd.final:
         cmd = ShellCmdList(cmd, shell=shell)
 
     if echo_cmd:

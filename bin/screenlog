@@ -35,4 +35,6 @@ if [[ -r "$HOME/.screenrc" ]] ; then
     echo 'source $HOME/.screenrc' >> "$screenrc"
 fi
 
-exec screen -c "$screenrc" -L "$@"
+screen -c "$screenrc" -L "$@"
+
+sleep 1

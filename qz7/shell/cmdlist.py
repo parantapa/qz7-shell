@@ -78,9 +78,10 @@ class CmdList:
         return sep.join(self.parts)
 
 class ShellCmdList:
-    def __init__(self, cmdlist, shell="/bin/bash -c"):
+    def __init__(self, cmdlist, shell="/bin/bash -c", final=True):
         self.cmdlist = cmdlist
         self.shell = shell
+        self.final = final
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.__dict__!r})"
