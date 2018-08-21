@@ -9,25 +9,48 @@ class CmdList:
     A list of shell commands.
     """
 
-    def __init__(self, cmd=None):
-        if cmd is None:
-            self.parts = ()
-        elif isinstance(cmd, str):
+    def __init__(self, cmd, sep="&&"):
+        if isinstance(cmd, str):
             self.parts = (cmd,)
+            self.sep = sep
         elif isinstance(cmd, CmdList):
             self.parts = cmd.parts
+            self.sep = cmd.sep
+        elif isinstance(cmd, (list, tuple)):
+            if not cmd:
+                raise ValueError("Can't create CmdList from empty list or tuple")
+            if not all(isinstance(c, str) for c in cmd):
+                raise ValueError("Not all elements of list are strings")
+            self.parts = tuple(cmd)
+            self.sep = sep
         else:
-            raise ValueError("Can create CmdList from another CmdList or a string")
+            raise ValueError("Invalid type for cmd")
 
     def __repr__(self):
-        return f"CmdList({self.parts!r})"
+        return f"{self.__class__.__name__}({self.__dict__!r})"
+
+    def tostr(self, level=0, indent=2):
+        """
+        Convert the command list to a pretty string.
+        """
+
+        sep = self.sep.strip()
+        sep = f" {sep} \\\n"
+
+        indent_str = " " * (level * indent)
+        parts = [indent_str + part for part in self.parts]
+        parts = sep.join(parts)
+        return parts
+
+    def __str__(self):
+        return self.tostr()
 
     def __add__(self, other):
         if isinstance(other, CmdList):
             ret = CmdList(self)
             ret.parts += other.parts
             return ret
-        elif isinstance(other, str):
+        if isinstance(other, str):
             ret = CmdList(self)
             ret.parts += (other,)
             return ret
@@ -39,50 +62,69 @@ class CmdList:
             ret = CmdList(other)
             ret.parts += self.parts
             return ret
-        elif isinstance(other, str):
+        if isinstance(other, str):
             ret = CmdList(other)
             ret.parts += self.parts
             return ret
 
         return NotImplemented
 
-    def tocmd(self, shell="/bin/bash -c", sep="&&"):
+    def execfmt(self):
         """
-        Convert the command list to a command that can be executed.
+        Convert the command list to executable format.
         """
 
-        if not self.parts:
-            raise ValueError("Can't convert an empty CmdList to a command")
+        sep = " {0} ".format(self.sep.strip())
+        return sep.join(self.parts)
 
-        sep = sep.strip()
-        sep = f" {sep} "
+class ShellCmdList:
+    def __init__(self, cmdlist, shell="/bin/bash -c"):
+        self.cmdlist = cmdlist
+        self.shell = shell
 
-        parts = sep.join(self.parts)
-        parts = shlex.quote(parts)
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.__dict__!r})"
 
-        cmd = f"{shell} {parts}"
-        return cmd
+    def tostr(self, level=0, indent=2):
+        """
+        Convert the shell command to string.
+        """
 
-def command(*args, quote=None):
+        indent_str = " " * (level * indent)
+        cmdlist_str = self.cmdlist.tostr(level=level+1, indent=indent)
+        return f"{indent_str}{self.shell}\n{cmdlist_str}"
+
+    def __str__(self):
+        return self.tostr()
+
+    def execfmt(self):
+        """
+        Convert the shell command list to executable format.
+        """
+
+        cmdlist = self.cmdlist.execfmt()
+        cmdlist = shlex.quote(cmdlist)
+        return f"{self.shell} {cmdlist}"
+
+def command(cmds, *args, **kwargs):
     """
-    Create the cmd from args.
+    Create a CmdList from the format string cmds.
     """
 
-    if not args:
-        return CmdList()
+    args = [shlex.quote(str(x)) for x in args]
+    kwargs = {k: shlex.quote(str(v)) for k, v in kwargs.items()}
 
-    if len(args) == 1:
-        if quote is None:
-            quote = False
-        args = args[0]
-        if quote:
-            args = shlex.quote(str(args))
-    else:
-        if quote is None:
-            quote = True
-        if quote:
-            args = map(str, args)
-            args = map(shlex.quote, args)
-        args = " ".join(args)
+    # Check for newlines
+    for arg in args:
+        if "\n" in arg:
+            raise ValueError("Passing raw newlines via arguments is not supported")
+    for v in kwargs.values():
+        if "\n" in v:
+            raise ValueError("Passing raw newlines via arguments is not supported")
 
-    return CmdList(args)
+    cmds = cmds.format(*args, **kwargs)
+    cmds = cmds.split("\n")
+    cmds = [cmd.strip() for cmd in cmds]
+    cmds = [cmd for cmd in cmds if cmd and not cmd.startswith("#")]
+
+    return CmdList(cmds)
