@@ -14,11 +14,13 @@ setup(
     long_description_content_type="text/markdown",
 
     packages=["qz7.shell"],
+    scripts=["bin/screenlog"],
 
     use_scm_version=True,
     setup_requires=['setuptools_scm'],
 
     install_requires=[
+        "blessings",
         "paramiko"
     ],
 
