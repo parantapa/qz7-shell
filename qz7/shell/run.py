@@ -195,7 +195,9 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
     elif len(hostnames) > 1 and len(cmds) == 1:
         pass
     else:
-        raise ValueError("Invalid # hostname x # cmd combination")
+        err = "Invalid # hostname x # cmd combination: %d x %d"
+        err = err % (len(hostnames), len(cmds))
+        raise ValueError(err)
 
     # Make cmds same length as hostnames
     if len(cmds) == 1 and len(hostnames) > 1:

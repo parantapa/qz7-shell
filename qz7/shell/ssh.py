@@ -3,10 +3,16 @@ Functions to connect to server via ssh.
 """
 
 import os
-import paramiko
+import time
 import threading
 
+import paramiko
+import logbook
+
 THLOCAL = threading.local()
+DEFAULT_RETRIES = 10
+
+log = logbook.Logger(__name__)
 
 def get_ssh_config():
     """
@@ -44,22 +50,37 @@ def get_connect_config(ssh_config, hostname):
 
     return cfg
 
-def make_ssh_client(hostname):
+def make_ssh_client(hostname, retries=None):
     """
     Return a connected ssh client.
     """
 
     ssh_config = get_ssh_config()
-    connect_config = get_connect_config(ssh_config, hostname)
+    if retries is None:
+        retries = DEFAULT_RETRIES
 
-    client = paramiko.SSHClient()
-    client.load_system_host_keys()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(**connect_config)
+    last_exc = None
+    for try_ in range(retries):
+        connect_config = get_connect_config(ssh_config, hostname)
 
-    return client
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-def get_ssh_client(hostname):
+        try:
+            client.connect(**connect_config)
+            return client
+        except paramiko.ssh_exception.ProxyCommandFailure as exc:
+            log.info(f"Error connecting to {hostname} (try {try_}), retrying ...")
+            last_exc = exc
+            client.close()
+            connect_config['sock'].close()
+            time.sleep(1)
+
+    if last_exc is not None:
+        raise last_exc # pylint: disable=raising-bad-type
+
+def get_ssh_client(hostname, fresh=False, retries=None):
     """
     Get a ssh client from the thread local cache.
     """
@@ -67,7 +88,12 @@ def get_ssh_client(hostname):
     if not hasattr(THLOCAL, "ssh_clients"):
         THLOCAL.ssh_clients = {}
 
+    if fresh:
+        if hostname in THLOCAL.ssh_clients:
+            THLOCAL.ssh_clients[hostname].close()
+            del THLOCAL.ssh_clients[hostname]
+
     if hostname not in THLOCAL.ssh_clients:
-        THLOCAL.ssh_clients[hostname] = make_ssh_client(hostname)
+        THLOCAL.ssh_clients[hostname] = make_ssh_client(hostname, retries)
 
     return THLOCAL.ssh_clients[hostname]
