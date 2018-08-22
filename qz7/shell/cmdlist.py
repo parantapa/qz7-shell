@@ -78,6 +78,10 @@ class CmdList:
         return sep.join(self.parts)
 
 class ShellCmdList:
+    """
+    CmdList wrapper shell.
+    """
+
     def __init__(self, cmdlist, shell="/bin/bash -c", final=True):
         self.cmdlist = cmdlist
         self.shell = shell
@@ -112,6 +116,7 @@ def command(cmds, *args, **kwargs):
     Create a CmdList from the format string cmds.
     """
 
+    cmds = str(cmds)
     args = [shlex.quote(str(x)) for x in args]
     kwargs = {k: shlex.quote(str(v)) for k, v in kwargs.items()}
 

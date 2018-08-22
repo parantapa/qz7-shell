@@ -2,6 +2,7 @@
 Helper functions to execute shell commands locally and via ssh.
 """
 # pylint: disable=too-many-arguments
+# pylint: disable=too-many-branches
 
 import sys
 import shlex
@@ -170,8 +171,32 @@ def do_remote_parallel(hostnames, cmds, pty, echo_output, capture, check, max_wo
     return outputs, exceptions
 
 def remote(hostname, cmd, shell="/bin/bash -l -c",
-           pty=True, echo_cmd=True, echo_output=None,
-           capture=True, check=False, parallel=None, max_workers=None):
+           pty=True, echo_cmd=True, echo_output=True,
+           capture=True, check=False):
+    """
+    Execute the command in a remote shell.
+    """
+    # pylint: disable=redefined-argument-from-local
+
+    term = get_term()
+
+    if isinstance(cmd, CmdList):
+        cmd = ShellCmdList(cmd, shell=shell)
+    elif isinstance(cmd, ShellCmdList) and not cmd.final:
+        cmd = ShellCmdList(cmd, shell=shell)
+
+    if echo_cmd:
+        hostname_str = getattr(term, HOSTNAME_COLOR)(hostname)
+        log.info(f"Executing on: {hostname_str}\n{cmd}")
+
+    if hasattr(cmd, "execfmt"):
+        cmd = cmd.execfmt()
+
+    return do_remote(hostname, cmd, pty, echo_output, capture, check)
+
+def remote_m(hostname, cmd, shell="/bin/bash -l -c",
+             pty=True, echo_cmd=True, echo_output=None,
+             capture=True, check=False, parallel=None, max_workers=None):
     """
     Execute the command in a remote shell.
     """
@@ -215,7 +240,6 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
             cmd = ShellCmdList(cmd, shell=shell)
         elif isinstance(cmd, ShellCmdList) and not cmd.final:
             cmd = ShellCmdList(cmd, shell=shell)
-
         ncmds.append(cmd)
     cmds = ncmds
 
@@ -233,8 +257,11 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
     cmds = ncmds
 
     if parallel:
-        return do_remote_parallel(hostnames, cmds, pty, echo_output, capture, check, max_workers)
-    return do_remote_serial(hostnames, cmds, pty, echo_output, capture, check)
+        outputs, exceptions = do_remote_parallel(hostnames, cmds, pty, echo_output, capture, check, max_workers)
+    else:
+        outputs, exceptions = do_remote_serial(hostnames, cmds, pty, echo_output, capture, check)
+
+    return outputs, exceptions
 
 def local(cmd, *args, **kwargs):
     """
