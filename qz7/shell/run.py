@@ -87,27 +87,26 @@ def do_remote(hostname, cmd, pty, echo_output, capture, check):
     try:
         term = get_term()
 
-        ssh_client = get_ssh_client(hostname)
+        with get_ssh_client(hostname) as ssh_client:
+            chan = ssh_client.get_transport().open_session()
+            if pty:
+                if term.width is None:
+                    term_width = DEFAULT_TERM_WIDTH
+                else:
+                    term_width = term.width
+                chan.get_pty(width=term_width)
+            chan.exec_command(cmd)
+            sout = chan.makefile("rt", -1)
 
-        chan = ssh_client.get_transport().open_session()
-        if pty:
-            if term.width is None:
-                term_width = DEFAULT_TERM_WIDTH
-            else:
-                term_width = term.width
-            chan.get_pty(width=term_width)
-        chan.exec_command(cmd)
-        sout = chan.makefile("rt", -1)
-
-        output = []
-        for line in sout:
-            if echo_output:
-                sys.stdout.write(line)
-                sys.stdout.flush()
-            if capture:
-                output.append(line)
-        output = "".join(output)
-        returncode = chan.recv_exit_status()
+            output = []
+            for line in sout:
+                if echo_output:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                if capture:
+                    output.append(line)
+            output = "".join(output)
+            returncode = chan.recv_exit_status()
     except Exception as e:
         raise RemoteExecError(e, hostname)
 
