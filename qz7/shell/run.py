@@ -17,7 +17,6 @@ from qz7.shell.cmdlist import CmdList, ShellCmdList
 from qz7.shell.ssh import get_ssh_client
 
 DEFAULT_TERM_WIDTH = 1024
-HOSTNAME_COLOR = "bold_cyan"
 TERM = None
 
 log = logging.getLogger(__name__)
@@ -90,10 +89,10 @@ def do_remote(hostname, cmd, pty, echo_output, capture, check):
         with get_ssh_client(hostname) as ssh_client:
             chan = ssh_client.get_transport().open_session()
             if pty:
-                if term.width is None:
-                    term_width = DEFAULT_TERM_WIDTH
-                else:
+                if hasattr(term, "width") and term.width is not None:
                     term_width = term.width
+                else:
+                    term_width = DEFAULT_TERM_WIDTH
                 chan.get_pty(width=term_width)
             chan.exec_command(cmd)
             sout = chan.makefile("rt", -1)
@@ -120,12 +119,10 @@ def do_remote_serial(hostnames, cmds, pty, echo_output, capture, check):
     Execute the command in a remote shell on remote hosts serially.
     """
 
-    term = get_term()
-
     outputs = []
     exceptions = []
     for hostname, cmd in zip(hostnames, cmds):
-        hostname_str = getattr(term, HOSTNAME_COLOR)(hostname)
+        hostname_str = str(hostname)
         log.info("Executing on: %s", hostname_str)
         try:
             out = do_remote(hostname, cmd, pty, echo_output, capture, check)
@@ -141,8 +138,6 @@ def do_remote_parallel(hostnames, cmds, pty, echo_output, capture, check, max_wo
     Execute the command in a remote shell on remote hosts in parallel.
     """
 
-    term = get_term()
-
     do_remote_partial = partial(do_remote, pty=pty,
                                 echo_output=echo_output, capture=capture,
                                 check=check)
@@ -156,11 +151,11 @@ def do_remote_parallel(hostnames, cmds, pty, echo_output, capture, check, max_wo
         for fut in as_completed(futs):
             try:
                 out = fut.result()
-                hostname_str = getattr(term, HOSTNAME_COLOR)(out.hostname)
+                hostname_str = str(out.hostname)
                 log.info("Succesfully finished on: %s", hostname_str)
                 outputs.append(out)
             except (RemoteExecError, RemoteCalledProcessError) as e:
-                hostname_str = getattr(term, HOSTNAME_COLOR)(e.hostname)
+                hostname_str = str(e.hostname)
                 log.exception("Unexpected exception on: %s", hostname_str)
                 exceptions.append(e)
             except Exception as e: # pylint: disable=broad-except
@@ -177,15 +172,13 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
     """
     # pylint: disable=redefined-argument-from-local
 
-    term = get_term()
-
     if isinstance(cmd, CmdList):
         cmd = ShellCmdList(cmd, shell=shell)
     elif isinstance(cmd, ShellCmdList) and not cmd.final:
         cmd = ShellCmdList(cmd, shell=shell)
 
     if echo_cmd:
-        hostname_str = getattr(term, HOSTNAME_COLOR)(hostname)
+        hostname_str = str(hostname)
         log.info("Executing on: %s\n%s", hostname_str, cmd)
 
     if hasattr(cmd, "execfmt"):
