@@ -117,6 +117,14 @@ def command(cmds, *args, **kwargs):
     """
 
     cmds = str(cmds)
+    cmds = cmds.split("\n")
+    cmds = [cmd.strip() for cmd in cmds]
+    cmds = [cmd for cmd in cmds if cmd]
+    cmds = [cmd for cmd in cmds if not cmd.startswith("#")]
+    cmds = "\n".join(cmds)
+    cmds = cmds.replace("\\\n", " ")
+    cmds = cmds.split("\n")
+
     args = [shlex.quote(str(x)) for x in args]
     kwargs = {k: shlex.quote(str(v)) for k, v in kwargs.items()}
 
@@ -128,9 +136,6 @@ def command(cmds, *args, **kwargs):
         if "\n" in v:
             raise ValueError("Passing raw newlines via arguments is not supported")
 
-    cmds = cmds.format(*args, **kwargs)
-    cmds = cmds.split("\n")
-    cmds = [cmd.strip() for cmd in cmds]
-    cmds = [cmd for cmd in cmds if cmd and not cmd.startswith("#")]
+    cmds = [cmd.format(*args, **kwargs) for cmd in cmds]
 
     return CmdList(cmds)
