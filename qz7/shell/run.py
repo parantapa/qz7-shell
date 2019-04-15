@@ -6,11 +6,11 @@ Helper functions to execute shell commands locally and via ssh.
 
 import sys
 import shlex
+import logging
 from functools import partial
 from subprocess import run
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import logbook
 from blessings import Terminal
 
 from qz7.shell.cmdlist import CmdList, ShellCmdList
@@ -20,7 +20,7 @@ DEFAULT_TERM_WIDTH = 1024
 HOSTNAME_COLOR = "bold_cyan"
 TERM = None
 
-log = logbook.Logger(__name__)
+log = logging.getLogger(__name__)
 
 def set_term(term):
     global TERM
@@ -126,12 +126,12 @@ def do_remote_serial(hostnames, cmds, pty, echo_output, capture, check):
     exceptions = []
     for hostname, cmd in zip(hostnames, cmds):
         hostname_str = getattr(term, HOSTNAME_COLOR)(hostname)
-        log.info(f"Executing on: {hostname_str}")
+        log.info("Executing on: %s", hostname_str)
         try:
             out = do_remote(hostname, cmd, pty, echo_output, capture, check)
             outputs.append(out)
         except Exception as e: # pylint: disable=broad-except
-            log.warn(f"Unexpected exception", exc_info=True)
+            log.exception("Unexpected exception")
             exceptions.append(e)
 
     return outputs, exceptions
@@ -157,14 +157,14 @@ def do_remote_parallel(hostnames, cmds, pty, echo_output, capture, check, max_wo
             try:
                 out = fut.result()
                 hostname_str = getattr(term, HOSTNAME_COLOR)(out.hostname)
-                log.info(f"Succefully finished on: {hostname_str}")
+                log.info("Succesfully finished on: %s", hostname_str)
                 outputs.append(out)
             except (RemoteExecError, RemoteCalledProcessError) as e:
                 hostname_str = getattr(term, HOSTNAME_COLOR)(e.hostname)
-                log.warn(f"Unexpected exception on: {hostname_str}", exc_info=True)
+                log.exception("Unexpected exception on: %s", hostname_str)
                 exceptions.append(e)
             except Exception as e: # pylint: disable=broad-except
-                log.warn(f"Unexpected exception on unknown host", exc_info=True)
+                log.exception("Unexpected exception on unknown host")
                 exceptions.append(e)
 
     return outputs, exceptions
@@ -186,7 +186,7 @@ def remote(hostname, cmd, shell="/bin/bash -l -c",
 
     if echo_cmd:
         hostname_str = getattr(term, HOSTNAME_COLOR)(hostname)
-        log.info(f"Executing on: {hostname_str}\n{cmd}")
+        log.info("Executing on: %s\n%s", hostname_str, cmd)
 
     if hasattr(cmd, "execfmt"):
         cmd = cmd.execfmt()
@@ -244,9 +244,9 @@ def remote_m(hostname, cmd, shell="/bin/bash -l -c",
 
     if echo_cmd:
         if parallel:
-            log.info("Executing in parallel on {0} host(s)\n{1}", len(hostnames), cmds[0])
+            log.info("Executing in parallel on %d host(s)\n%s", len(hostnames), cmds[0])
         else:
-            log.info("Executing in serial on {0} host(s)\n{1}", len(hostnames), cmds[0])
+            log.info("Executing in serial on %d host(s)\n%s", len(hostnames), cmds[0])
 
     ncmds = []
     for cmd in cmds:
@@ -276,7 +276,7 @@ def local(cmd, *args, **kwargs):
         cmd = ShellCmdList(cmd, shell=shell)
 
     if echo_cmd:
-        log.info(f"Executing\n{cmd}")
+        log.info("Executing\n%s", cmd)
 
     if hasattr(cmd, "execfmt"):
         cmd = cmd.execfmt()

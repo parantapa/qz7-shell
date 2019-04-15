@@ -4,14 +4,14 @@ Functions to connect to server via ssh.
 
 import os
 import time
+import logging
 from contextlib import contextmanager
 
 import paramiko
-import logbook
 
 DEFAULT_RETRIES = 10
 
-log = logbook.Logger(__name__)
+log = logging.getLogger(__name__)
 
 def get_ssh_config():
     """
@@ -100,7 +100,7 @@ def make_ssh_client(hostname, retries=None):
                     yield client
                     return
                 except paramiko.ssh_exception.ProxyCommandFailure as exc:
-                    log.info(f"Error connecting to {hostname} (try {try_}), retrying ...")
+                    log.info("Error connecting to {%s} (try {%d}), retrying ...", hostname, try_)
                     last_exc = exc
                     time.sleep(1)
 
