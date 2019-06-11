@@ -1,5 +1,5 @@
 """
-Create and manipluate cmd lists.
+Create and manipulate command lists.
 """
 
 import shlex
@@ -7,113 +7,129 @@ import shlex
 class CmdList:
     """
     A list of shell commands.
+
+    Attributes:
+        commands: The list of commands to execute in the shell
+        shell: The shell to execute the commands in
+        separator: The separator use to separate the commands
     """
 
-    def __init__(self, cmd, sep="&&"):
-        if isinstance(cmd, str):
-            self.parts = (cmd,)
-            self.sep = sep
-        elif isinstance(cmd, CmdList):
-            self.parts = cmd.parts
-            self.sep = cmd.sep
-        elif isinstance(cmd, (list, tuple)):
-            if not cmd:
-                raise ValueError("Can't create CmdList from empty list or tuple")
-            if not all(isinstance(c, str) for c in cmd):
-                raise ValueError("Not all elements of list are strings")
-            self.parts = tuple(cmd)
-            self.sep = sep
+    def __init__(self, command, shell="/bin/bash -c", separator="&&"):
+
+        shell = shell.strip()
+        separator = separator.strip()
+
+        if isinstance(command, str):
+            self.commands = (command,)
+            self.shell = shell
+            self.separator = separator
+
+        elif isinstance(command, self.__class__):
+            self.commands = command.commands
+            self.shell = command.shell
+            self.separator = command.separator
+
+        elif isinstance(command, (list, tuple)):
+            if not command:
+                raise ValueError("Cannot create command list from empty list or tuple")
+
+            self.commands = tuple(str(c) for c in command)
+            self.shell = shell
+            self.separator = separator
+
         else:
-            raise ValueError("Invalid type for cmd")
+            raise ValueError("Invalid type for command")
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.__dict__!r})"
 
-    def tostr(self, level=0, indent=2):
-        """
-        Convert the command list to a pretty string.
-        """
-
-        sep = self.sep.strip()
-        sep = f" {sep} \\\n"
-
-        indent_str = " " * (level * indent)
-        parts = [indent_str + part for part in self.parts]
-        parts = sep.join(parts)
-        return parts
-
     def __str__(self):
-        return self.tostr()
+        separator = " {} ".format(self.separator)
+        commands_str = separator.join(self.commands)
+        commands_str = shlex.quote(commands_str)
+        return "{} {}".format(self.shell, commands_str)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        return False
 
     def __add__(self, other):
-        if isinstance(other, CmdList):
-            ret = CmdList(self)
-            ret.parts += other.parts
+        if isinstance(other, self.__class__):
+            ret = self.__class__(self)
+            ret.commands += other.commands
             return ret
         if isinstance(other, str):
-            ret = CmdList(self)
-            ret.parts += (other,)
+            ret = self.__class__(self)
+            ret.commands += (other,)
             return ret
 
         return NotImplemented
 
     def __radd__(self, other):
-        if isinstance(other, CmdList):
-            ret = CmdList(other)
-            ret.parts += self.parts
+        if isinstance(other, self.__class__):
+            ret = self.__class__(other)
+            ret.commands += self.commands
             return ret
         if isinstance(other, str):
-            ret = CmdList(other)
-            ret.parts += self.parts
+            ret = self.__class__(other)
+            ret.commands += self.commands
             return ret
 
         return NotImplemented
 
-    def execfmt(self):
+    def to_popen_args(self):
         """
-        Convert the command list to executable format.
+        Return the args parameter for subprocess.Popen
+
+        Returns:
+            A list of arguments for subprocess.Popen
         """
 
-        sep = " {0} ".format(self.sep.strip())
-        return sep.join(self.parts)
+        return shlex.split(str(self))
 
-class ShellCmdList:
+def command_format(cmds, *args, **kwargs):
     """
-    CmdList wrapper shell.
-    """
+    Create a CmdList from the command format string.
 
-    def __init__(self, cmdlist, shell="/bin/bash -c", final=True):
-        self.cmdlist = cmdlist
-        self.shell = shell
-        self.final = final
+    This function constructs a command list from a single command string.
 
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self.__dict__!r})"
+    cmd = command_format("string", *args, **kwargs)
+    is roughly equivalent to
+    cmd = "string".format(*args, **kwargs)
 
-    def tostr(self, level=0, indent=2):
-        """
-        Convert the shell command to string.
-        """
+    Before the arguments are applied to the format string
+    they are passed through shlex.quote to make them safe.
 
-        indent_str = " " * (level * indent)
-        cmdlist_str = self.cmdlist.tostr(level=level+1, indent=indent)
-        return f"{indent_str}{self.shell}\n{cmdlist_str}"
+    command_format also creates a single shell command list
+    for a multi line list of commands.
 
-    def __str__(self):
-        return self.tostr()
+    >>> x = command_format('''
+        command1
+        command2
+        command3
+        ''')
+    >>> y = CmdList(['command1', 'command2', 'command3'])
+    >>> x == y
+    True
+    >>> str(x) == "/bin/bash -c 'command1 && command2 && command3'"
+    True
 
-    def execfmt(self):
-        """
-        Convert the shell command list to executable format.
-        """
+    cmds can contain empty lines, which are ignored.
 
-        cmdlist = self.cmdlist.execfmt()
-        cmdlist = shlex.quote(cmdlist)
-        return f"{self.shell} {cmdlist}"
+    Lines in cmds
+    where the first non whitespace character is #
+    are also ignored.
 
-def command(cmds, *args, **kwargs):
-    """
-    Create a CmdList from the format string cmds.
+    Lines that end in with '\' are merged with the following line.
+
+    Args:
+        cmds: Command format string
+        *args: list of positional arguments for the command format string
+        **kwargs: list of keyword arguments for the command format string
+
+    Returns:
+        A CmdList instance
     """
 
     cmds = str(cmds)
@@ -122,7 +138,7 @@ def command(cmds, *args, **kwargs):
     cmds = [cmd for cmd in cmds if cmd]
     cmds = [cmd for cmd in cmds if not cmd.startswith("#")]
     cmds = "\n".join(cmds)
-    cmds = cmds.replace("\\\n", " ")
+    cmds = cmds.replace("\\\n", "")
     cmds = cmds.split("\n")
 
     args = [shlex.quote(str(x)) for x in args]
