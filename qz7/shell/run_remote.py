@@ -1,6 +1,8 @@
 """
 Execute shell commands remotely via ssh.
 """
+#pylint: disable=too-many-arguments
+#pylint: disable=too-many-branches
 
 import sys
 import logging
@@ -11,6 +13,7 @@ from blessings import Terminal
 from qz7.shell.cmdlist import CmdList
 from qz7.shell.ssh import get_ssh_client
 
+DEFAULT_ENCODING = "UTF-8"
 DEFAULT_TERM_WIDTH = 1024
 TERM = None
 
@@ -100,7 +103,7 @@ class RemoteExecError(subprocess.SubprocessError):
     def __repr__(self):
         return f"{self.__class__.__name__}({self.__dict__!r})"
 
-def _do_remote(hostname, cmd, pty, echo_output, capture, check):
+def _do_remote(hostname, cmd, pty, echo_output, capture, check, text):
     """
     Do the remote execution.
     """
@@ -117,19 +120,22 @@ def _do_remote(hostname, cmd, pty, echo_output, capture, check):
                     term_width = DEFAULT_TERM_WIDTH
                 chan.get_pty(width=term_width)
             chan.exec_command(cmd)
-            sout = chan.makefile("rt", -1)
+            sout = chan.makefile("rb", -1)
 
             output = []
             for line in sout:
                 if echo_output:
-                    sys.stdout.write(line)
+                    sys.stdout.write(line.decode(DEFAULT_ENCODING))
                     sys.stdout.flush()
                 if capture:
                     output.append(line)
-            output = "".join(output)
+                output = b"".join(output)
 
             if not capture:
                 output = None
+
+            if output is not None and text is True:
+                output = output.decode(DEFAULT_ENCODING)
 
             returncode = chan.recv_exit_status()
     except Exception as e:
@@ -142,7 +148,7 @@ def _do_remote(hostname, cmd, pty, echo_output, capture, check):
 
 def run_remote(hostname, cmd, shell="/bin/bash -l -c",
                pty=True, echo_output=True,
-               capture=True, check=False):
+               capture_output=False, check=False, text=False):
     """
     Run the command described by cmd on a remote host.
 
@@ -155,9 +161,10 @@ def run_remote(hostname, cmd, shell="/bin/bash -l -c",
         shell: Shell to execute the command in the remote host
         pty: If true, run the remote command in the context of a pty
         echo_output: If true, echo the output of the command locally
-        capture: If true, capture the output of the remote command
+        capture_output: If true, capture the output of the remote command
         check: If true, raise RemoteCalledProcessError if remote command exits
                with non zero exit code
+        text: If true, read the output as a string mode
 
     Returns:
         An instance of RemoteCompletedProcess
@@ -175,4 +182,4 @@ def run_remote(hostname, cmd, shell="/bin/bash -l -c",
             cmd.shell = shell
         cmd = str(cmd)
 
-    return _do_remote(hostname, cmd, pty, echo_output, capture, check)
+    return _do_remote(hostname, cmd, pty, echo_output, capture_output, check, text)
