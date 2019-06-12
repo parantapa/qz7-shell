@@ -5,43 +5,17 @@ Execute shell commands remotely via ssh.
 #pylint: disable=too-many-branches
 
 import sys
+import shutil
 import logging
 import subprocess
-
-from blessings import Terminal
 
 from qz7.shell.cmdlist import CmdList
 from qz7.shell.ssh import get_ssh_client
 
 DEFAULT_ENCODING = "UTF-8"
 DEFAULT_TERM_WIDTH = 1024
-TERM = None
 
 log = logging.getLogger(__name__)
-
-def set_term(term):
-    """
-    Set the global terminal object.
-
-    Args:
-        term: Blessings terminal object
-    """
-
-    global TERM
-
-    TERM = term
-
-def get_term():
-    """
-    Return the global terminal object.
-    """
-
-    global TERM
-
-    if TERM is None:
-        TERM = Terminal()
-
-    return TERM
 
 class RemoteCompletedProcess(subprocess.CompletedProcess):
     """
@@ -109,16 +83,11 @@ def _do_remote(hostname, cmd, pty, echo_output, capture, check, text):
     """
 
     try:
-        term = get_term()
-
         with get_ssh_client(hostname) as ssh_client:
             chan = ssh_client.get_transport().open_session()
             if pty:
-                if hasattr(term, "width") and term.width is not None:
-                    term_width = term.width
-                else:
-                    term_width = DEFAULT_TERM_WIDTH
-                chan.get_pty(width=term_width)
+                columns, _ = shutil.get_terminal_size((DEFAULT_TERM_WIDTH, 24))
+                chan.get_pty(width=columns)
             chan.exec_command(cmd)
             sout = chan.makefile("rb", -1)
 
